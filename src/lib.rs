@@ -7,26 +7,26 @@ use std::cmp::Ordering;
 //TODO:: Find a way to attach these enums to the Order struct only and not a global enums
 
 #[derive(Clone, Debug, Copy)]
-enum OrderSide {
+pub enum OrderSide {
     Buy,
     Sell
 }
 
 #[derive(Clone, Debug, Copy)]
-enum OrderType {
+pub enum OrderType {
     Mkt,
     Limit
 }
 
 #[derive(Clone, Debug, Copy)]
-enum EventType {
+pub enum EventType {
     New,
     Rpl,
     Cxl
 }
 
 #[derive(Clone, Debug)]
-struct Order {
+pub struct Order {
     id_: String,
     symbol_: String,
     qty_: i32,
@@ -62,7 +62,7 @@ impl Eq for Order {}
 struct Level {
     orders_: BTreeSet<Order>,
     price_: f32,
-    side_ : OrderSide
+    //side_ : OrderSide //use if needed
 }
 
 impl PartialOrd for Level {
@@ -94,7 +94,7 @@ impl Level {
         let new_level = Level {
             price_: p_order.price_,
             orders_: BTreeSet::new(),
-            side_: p_order.side_
+            //side_: p_order.side_
         };
         new_level
     }
@@ -133,22 +133,24 @@ impl Level {
                     let mut copy_of_first_order = (*first_order).clone();
                     if remaining_qty == copy_of_first_order.qty_ {
                         //remove order and return exec qty
-                        executed_qty += remaining_qty;
+                        copy_of_first_order.qty_ = 0;
+                        executed_qty = remaining_qty;
+                        remaining_qty = 0;
                         self.orders_.pop_first();
-                        return Ok(executed_qty);
                     }
                     else if remaining_qty < copy_of_first_order.qty_ {
                         //reduce orderbook order qty and return exec qty
                         executed_qty += remaining_qty;
                         copy_of_first_order.qty_ -= remaining_qty;
+                        remaining_qty = 0;
                         self.orders_.replace(copy_of_first_order);
-                        return Ok(executed_qty);
                     }
-                    else {
-                        //remove order, increament execqty, decreament remaining qty and move to next order
-                        copy_of_first_order.qty_ -= remaining_qty;
-                        remaining_qty -= copy_of_first_order.qty_;
-                        executed_qty += copy_of_first_order.qty_;
+                    else if remaining_qty > copy_of_first_order.qty_{
+                        let being_executed = copy_of_first_order.qty_;
+    
+                        copy_of_first_order.qty_ -= being_executed;
+                        executed_qty += being_executed;
+                        remaining_qty = copy_of_first_order.qty_;
                         self.orders_.pop_first();
                     }
                 }
@@ -178,67 +180,72 @@ impl OrderBook {
         }
     }
 
-    fn match_order(&mut self, p_order: &mut Order) -> Result<i32, String> {
-        let level = Level::from_order(p_order);
-        match p_order.side_ {
-            
+    fn get_level_match(&self, p_input_order: &Order) -> Option<&Level> {
+        match p_input_order.side_ {
             OrderSide::Buy => {
-                let found_level = self.asks_.get(&level);
-                match found_level {
-                    None => { 
-                        return Ok(0); 
+                match  p_input_order.type_ {
+                    OrderType::Mkt => {
+                        return self.asks_.first();
                     }
-
-                    Some(matched_level) => {
-                        let mut copy_of_matched_level = (*matched_level).clone();
-                        let executed_qty = copy_of_matched_level.match_order(p_order)?;
-                        if executed_qty > 0 {
-                            self.asks_.replace(copy_of_matched_level);
-                        }
-                        return Ok(executed_qty);
+                    OrderType::Limit => {
+                        return self.asks_.get(&Level::from_order(p_input_order));
                     }
                 }
             }
-            
             OrderSide::Sell => {
-                let found_level = self.bids_.get(&level);
-                match found_level {
-                    None => { 
-                        return Ok(0); 
+                match p_input_order.type_ {
+                    OrderType::Mkt => {
+                        return self.bids_.first();
                     }
-
-                    Some(matched_level) => {
-                        let mut copy_of_matched_level = (*matched_level).clone();
-                        let executed_qty = copy_of_matched_level.match_order(p_order)?;
-                        if executed_qty > 0 {
-                            self.bids_.replace(copy_of_matched_level);
-                        }
-                        return Ok(executed_qty);
+                    OrderType::Limit => {
+                        return self.bids_.get(&Level::from_order(p_input_order));
                     }
                 }
             }
         }
     }
 
-    fn add_order(&mut self, p_order: &mut Order) -> Result<i32, String> {
+    fn match_order(&mut self, p_order: &mut Order) -> Result<i32, String> {
+
+        let found_level = self.get_level_match(p_order);
+        match found_level {
+            None => {
+                return Ok(0);
+            }
+            Some(matched_level) => {
+                let mut copy_of_matched_level = (*matched_level).clone();
+                let executed_qty = copy_of_matched_level.match_order(p_order)?;
+                if executed_qty > 0 {
+                    match p_order.side_ {                   
+                        OrderSide::Buy => {
+                            self.asks_.replace(copy_of_matched_level);
+                        }
+                        OrderSide::Sell => {
+                            self.bids_.replace(copy_of_matched_level);
+                        }
+                    }
+                }
+                return Ok(executed_qty);
+            }
+        }
+    }
+
+    fn add_order(&mut self, p_order: &mut Order) {
         let mut temp_level = Level::from_order(&p_order);
         match p_order.side_ {
             OrderSide::Buy => {
                 let found_level = self.bids_.get(&temp_level);
 
                 match found_level {
-                    
                     None => {
                         temp_level.add_order(p_order);
                         self.bids_.insert(temp_level);
-                        return Ok(0);
                     }
 
                     Some(current_level) => {
                         let mut copy_of_found_level = (*current_level).clone();
                         copy_of_found_level.add_order(p_order);
                         self.bids_.replace(copy_of_found_level);
-                        return Ok(0);
                     }
                 }
             }
@@ -247,18 +254,15 @@ impl OrderBook {
                 let found_level = self.asks_.get(&temp_level);
 
                 match found_level {
-                    
                     None => {
                         temp_level.add_order(p_order);
                         self.asks_.insert(temp_level);
-                        return Ok(0);
                     }
 
                     Some(current_level) => {
                         let mut copy_of_found_level = (*current_level).clone();
                         copy_of_found_level.add_order(p_order);
                         self.asks_.replace(copy_of_found_level);
-                        return Ok(0);
                     }
                 }
             }
@@ -274,11 +278,34 @@ pub struct OrderBookCollection {
 
 impl OrderBookCollection {
 
+    pub fn process_new_order(&mut self, p_order: &mut Order) -> Result<i32, String> {
+
+        let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
+        match order_book_or_error {
+            None => {
+                if let Some(new_order_book) = self.add_order_book(&p_order.symbol_) {
+                    return new_order_book.add_first_order(p_order)
+                }
+                return Err(String::from("Failed to add first order in a order book of symbol {p_order.symbol_}"));
+            }
+
+            Some(order_book) => {
+                let executed_qty = order_book.match_order(p_order)?; 
+                p_order.qty_ -= executed_qty;
+                if p_order.qty_ > 0 {
+                    order_book.add_order(p_order);
+                }
+                println!("Executed Qty: {executed_qty}, order qty: {} ", p_order.qty_);
+                return Ok(executed_qty);
+            }
+        }
+    }
+
     pub fn contains(&self, p_symbol: &String) -> bool {
         self.book_by_symbol.contains_key(p_symbol)
     }
 
-    pub fn get_book_by_symbol(&mut self, p_symbol: &String) -> Option<&mut OrderBook> {
+    fn get_book_by_symbol(&mut self, p_symbol: &String) -> Option<&mut OrderBook> {
 
         if let Some(mutable_order) = self.book_by_symbol.get_mut(p_symbol) {
             return Some(mutable_order);
@@ -286,7 +313,7 @@ impl OrderBookCollection {
         return None;
     }
 
-    pub fn add_order_book(&mut self, p_symbol: &String) -> Option<&mut OrderBook>{
+    fn add_order_book(&mut self, p_symbol: &String) -> Option<&mut OrderBook>{
         let new_order_book = OrderBook {
             bids_: BTreeSet::new(),
             asks_:BTreeSet::new()
@@ -305,29 +332,9 @@ pub fn process_event(p_event_type: EventType, p_order: &mut Order, p_order_book_
     match p_event_type {
         EventType::New => {
 
-            //handle if it is first order of this symbol
-            println!("New Order , received: {:?}", p_order);
-            let order_book_or_error = p_order_book_collection.get_book_by_symbol(&p_order.symbol_);
-
-            match order_book_or_error {
-                None => {
-                    if let Some(new_order_book) = p_order_book_collection.add_order_book(&p_order.symbol_) {
-                        return new_order_book.add_first_order(p_order)
-                    }
-                    return Err(String::from("Failed to add first order in a order book of symbol {p_order.symbol_}"));
-                }
-
-                Some(order_book) => {
-                    let executed_qty = order_book.match_order(p_order)?; 
-
-                    if executed_qty > 0 {
-                        println!("Ordergot executed :  {:?}, \n executed_qty: {executed_qty}", p_order);
-                        return Ok(executed_qty);
-                    }
-                    println!("Match Not found for order:  {:?}", p_order);
-                    return order_book.add_order(p_order);
-                }
-            }
+            
+            println!("\nNew Order, received: {:?}", p_order);
+            return p_order_book_collection.process_new_order(p_order);
         }
 
         EventType::Rpl =>  {
@@ -350,7 +357,6 @@ mod test {
 
     #[test]
     fn create_first_order() {
-        println!("==============================Test create_first_order starts======================================");
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
@@ -366,13 +372,10 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         assert_eq!(result, Ok(0));
-        println!("==============================Test create_first_order ends======================================");
     }
 
     #[test]
-    fn match_simple_order() {
-        println!("==============================Test match_simple_order starts======================================");
-     
+    fn qty_match_simple_order() {     
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
@@ -399,7 +402,7 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(order.qty_));
+        assert_eq!(result, Ok(200));
 
         
         let mut order = Order {
@@ -424,15 +427,11 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(order.qty_));
-
-        println!("==============================Test match_simple_order ends======================================");
+        assert_eq!(result, Ok(200));
     }
 
     #[test]
-    fn partial_match_simple_order() {
-        println!("==============================Test match_simple_order starts======================================");
-     
+    fn qty_macth_test_partial_match() {     
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
@@ -447,6 +446,7 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
+        //200 added to book, exected 0;
         assert_eq!(result, Ok(0));
 
         let mut order = Order {
@@ -459,7 +459,8 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(order.qty_));
+        //100 partially executed, 100 buy left in book
+        assert_eq!(result, Ok(100));
 
         
         let mut order = Order {
@@ -472,7 +473,8 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(0));
+        //100 executed, 100 sell left in book
+        assert_eq!(result, Ok(100));
 
         let mut order = Order {
             id_: String::from("4"),
@@ -484,7 +486,8 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(order.qty_));
+        //100 executed, nothing left in book
+        assert_eq!(result, Ok(100));
 
         let mut order = Order {
             id_: String::from("5"),
@@ -496,7 +499,8 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(100));
+        //200 buy added in book, nothing executed
+        assert_eq!(result, Ok(0));
 
         
         let mut order = Order {
@@ -509,9 +513,42 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        assert_eq!(result, Ok(100));
+        //200 buy sell matched, nothin left in book
+        assert_eq!(result, Ok(200));
+    }
 
+    #[test]
+    fn mkt_order_match() {
+        let mut order_book_collection = OrderBookCollection {
+            book_by_symbol: HashMap::new()
+        };
 
-        println!("==============================Test match_simple_order ends======================================");
+        let mut order = Order {
+            id_: String::from("1"),
+            price_: 100.0,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now()
+        };
+        let result = process_event(EventType::New, &mut order , &mut order_book_collection);
+        //200@100 buy added to book
+        assert_eq!(result, Ok(0));
+
+        
+        let mut order = Order {
+            id_: String::from("2"),
+            price_: 0.0,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Mkt,
+            entry_time_: std::time::SystemTime::now()
+        };
+        let result = process_event(EventType::New, &mut order , &mut order_book_collection);
+        //mkt matched 
+        assert_eq!(result, Ok(200));
+        //include match price in result
     }
 }
