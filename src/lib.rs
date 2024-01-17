@@ -120,7 +120,6 @@ impl Ord for Level {
     fn cmp(&self, p_other: &Self) -> Ordering {
         self.compare(p_other)
     }
-    // TODO:: Figure out a way to store sell in opposite order of buy
 }
 
 impl Eq for Level {}
@@ -436,6 +435,20 @@ pub fn process_event(
 #[cfg(test)]
 mod test {
 
+    /*
+    * Properties to verify : 
+    *   - exec Qty, exec Price, matched order id
+    * Matching scenarios:
+    *   - Simple match with Mkt order
+    *   - Simple match with limit order (price match)
+    *   - Best Price priority Then time priority (TODO:: More test cases)
+    *   - Best Price for bids vs best price for sells
+    *   - First order is mkt (no match found) => TODO::
+    *   - Match with Multiple orders : TODO:: Testing
+    *   - 
+    *   - 
+     */
+
     use super::*;
 
     fn validate_result(
@@ -672,7 +685,6 @@ mod test {
         //mkt matched
         matched_order_ids.push("1".to_string());
         validate_result(&result, 200, 100.0, Some(&matched_order_ids));
-        //TODO::include match price, matched order ids in result
 
         let mut order = Order {
             id_: String::from("3"),
@@ -746,7 +758,6 @@ mod test {
         //mkt matched 200@100
         matched_order_ids.push("1".to_string());
         validate_result(&result, 200, 100.0, Some(&matched_order_ids));
-        //TODO::include match price, matched order ids in result
 
         let mut order = Order {
             id_: String::from("4"),
@@ -871,7 +882,6 @@ mod test {
         //mkt matched to best price which is 100 at this time
         matched_order_ids.push("2".to_string());
         validate_result(&result, 200, 101.0, Some(&matched_order_ids));
-        //TODO::include match price, matched order ids in result
 
         let mut order = Order {
             id_: String::from("4"),
