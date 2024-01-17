@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 
 //Order
-//TODO:: Find a way to attach these enums to the Order struct only and not a global enums
+// TODO:: Find a way to attach these enums to the Order struct only and not a global enums
+// TODO:: Fix the string types in this project, currently all of them are owned strings 
 
 #[derive(Clone, Debug, Copy)]
 pub enum OrderSide {
@@ -413,7 +414,10 @@ mod test {
 
     use super::*;
 
-    fn validate_result(p_result: Result<Option<MatchingResult>, String>, p_exp_exec_qty: i32, p_exp_exec_price: f32) {
+    fn validate_result( p_result: &Result<Option<MatchingResult>, String>, 
+                        p_exp_exec_qty: i32, 
+                        p_exp_exec_price: f32, 
+                        p_matched_order_ids: Option<&Vec<String>>) {
         match p_result {
             Ok(match_result_or_none) => {
                 match match_result_or_none {
@@ -422,7 +426,15 @@ mod test {
                     }
                     Some(match_result) => {
                         assert_eq!(match_result.executed_qty_ , p_exp_exec_qty);
-                        assert_eq!(match_result.executed_price_, p_exp_exec_price);
+                        match p_matched_order_ids {
+                            None => {
+                                assert!(match_result.matched_order_ids_.is_empty());
+                            }
+                            Some(matched_ord_ids) => {
+                                assert_eq!(match_result.executed_price_, p_exp_exec_price);
+                                assert_eq!(&match_result.matched_order_ids_, matched_ord_ids);
+                            }
+                        }
                     }
                 }
             }
@@ -449,7 +461,7 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
     }
 
     #[test]
@@ -457,7 +469,8 @@ mod test {
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
-
+        
+        let mut matched_order_ids = Vec::new();
         let mut order = Order {
             id_: String::from("1"),
             price_: 100.0,
@@ -468,7 +481,7 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
 
         let mut order = Order {
             id_: String::from("2"),
@@ -479,8 +492,9 @@ mod test {
             type_: OrderType::Limit,
             entry_time_: std::time::SystemTime::now()
         };
+        matched_order_ids.push("1".to_string());
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        validate_result(result, 200, order.price_);
+        validate_result(&result, 200, order.price_, Some(&matched_order_ids));
 
         
         let mut order = Order {
@@ -493,7 +507,7 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
 
         let mut order = Order {
             id_: String::from("4"),
@@ -504,8 +518,10 @@ mod test {
             type_: OrderType::Limit,
             entry_time_: std::time::SystemTime::now()
         };
+        matched_order_ids.clear();
+        matched_order_ids.push("3".to_string());
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        validate_result(result, 200, order.price_);
+        validate_result(&result, 200, order.price_, Some(&matched_order_ids));
     }
 
     #[test]
@@ -513,6 +529,7 @@ mod test {
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
+        let mut matched_order_ids = Vec::new();
 
         let mut order = Order {
             id_: String::from("1"),
@@ -525,7 +542,7 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //200 added to book, exected 0;
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
 
         let mut order = Order {
             id_: String::from("2"),
@@ -538,9 +555,10 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //100 partially executed, 100 buy left in book
-        validate_result(result, 100, order.price_);
+        matched_order_ids.clear();
+        matched_order_ids.push("1".to_string());
+        validate_result(&result, 100, order.price_, Some(&matched_order_ids));
 
-        
         let mut order = Order {
             id_: String::from("3"),
             price_: 100.0,
@@ -551,8 +569,8 @@ mod test {
             entry_time_: std::time::SystemTime::now()
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
-        //100 executed, 100 sell left in book
-        validate_result(result, 100, order.price_);
+        //100 executed, 100 sell id 3 left in book
+        validate_result(&result, 100, order.price_, Some(&matched_order_ids));
 
         let mut order = Order {
             id_: String::from("4"),
@@ -565,7 +583,9 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //100 executed, nothing left in book
-        validate_result(result, 100, order.price_);
+        matched_order_ids.clear();
+        matched_order_ids.push("3".to_string());
+        validate_result(&result, 100, order.price_, Some(&matched_order_ids));
 
         let mut order = Order {
             id_: String::from("5"),
@@ -578,9 +598,9 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //200 buy added in book, nothing executed
-        validate_result(result, 0, 0.0);
+        matched_order_ids.clear();
+        validate_result(&result, 0, 0.0, None);
 
-        
         let mut order = Order {
             id_: String::from("6"),
             price_: 100.0,
@@ -592,7 +612,8 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //200 buy sell matched, nothin left in book
-        validate_result(result, 200, order.price_);
+        matched_order_ids.push("5".to_string());
+        validate_result(&result, 200, order.price_, Some(&matched_order_ids));
     }
 
     #[test]
@@ -600,6 +621,7 @@ mod test {
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
+        let mut matched_order_ids = Vec::new();
 
         let mut order = Order {
             id_: String::from("1"),
@@ -612,7 +634,7 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //200@100 buy added to book
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
 
         
         let mut order = Order {
@@ -626,7 +648,8 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //mkt matched 
-        validate_result(result, 200, order.price_);
+        matched_order_ids.push("1".to_string());
+        validate_result(&result, 200, order.price_, Some(&matched_order_ids));
         //TODO::include match price, matched order ids in result
 
         let mut order = Order {
@@ -640,10 +663,10 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //200@100 buy added to book
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
         
         let mut order = Order {
-            id_: String::from("2"),
+            id_: String::from("4"),
             price_: 0.0,
             symbol_: String::from("REL"),
             qty_: 200,
@@ -653,7 +676,7 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //another 200@100 added into book but not matched
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
     }
 
     #[test]
@@ -661,7 +684,7 @@ mod test {
         let mut order_book_collection = OrderBookCollection {
             book_by_symbol: HashMap::new()
         };
-
+        let mut matched_order_ids = Vec::new();
         let mut order = Order {
             id_: String::from("1"),
             price_: 100.0,
@@ -673,7 +696,7 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //200@100 buy added to book
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
 
         let mut order = Order {
             id_: String::from("2"),
@@ -686,7 +709,7 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //Another 200@100 buy added to book
-        validate_result(result, 0, 0.0);
+        validate_result(&result, 0, 0.0, None);
 
         
         let mut order = Order {
@@ -700,11 +723,12 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //mkt matched 
-        validate_result(result, 200, order.price_);
+        matched_order_ids.push("1".to_string());
+        validate_result(&result, 200, order.price_, Some(&matched_order_ids));
         //TODO::include match price, matched order ids in result
 
         let mut order = Order {
-            id_: String::from("2"),
+            id_: String::from("4"),
             price_: 0.0,
             symbol_: String::from("REL"),
             qty_: 200,
@@ -714,6 +738,8 @@ mod test {
         };
         let result = process_event(EventType::New, &mut order , &mut order_book_collection);
         //mkt matched
-        validate_result(result, 200, order.price_);
+        matched_order_ids.clear();
+        matched_order_ids.push("2".to_string());
+        validate_result(&result, 200, order.price_,Some(&matched_order_ids));
     }
 }
