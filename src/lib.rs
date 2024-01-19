@@ -159,6 +159,10 @@ impl Level {
         println!("Order id {:?} added into {:?}", p_order.id_, self);
     }
 
+    fn remove_order(&mut self, p_remove_order: &Order) -> bool {
+      return self.orders_.remove(p_remove_order);
+    }
+
     fn match_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
         //match the qty
         //step 1: get copy of first order
@@ -263,6 +267,31 @@ impl OrderBook {
         }
     }
 
+    fn get_level_match_from_id(&self, p_order: &Order) -> Option<(&Level, &Order)> {
+      match p_order.side_ {
+        OrderSide::Buy => {
+          for level in &self.bids_ {
+            for order in &level.orders_ {
+              if order.id_ == p_order.id_ {
+                return Some( (level, order) );
+              }
+            }
+          }
+        }
+
+        OrderSide::Sell => {
+          for level in &self.asks_ {
+            for order in &level.orders_ {
+              if order.id_ == p_order.id_ {
+                return Some( (level, order) );
+              }
+            }
+          }
+        }
+      }
+      return None;
+    }
+
     fn match_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
         let found_level = self.get_level_match(p_order);
         match found_level {
@@ -339,6 +368,45 @@ impl OrderBook {
         }
         println!("After add_order {:#?}", self);
     }
+
+    fn remove_order_by_id(&mut self, p_order: &Order) -> bool {
+      let level_order_match_or_none = self.get_level_match_from_id(p_order);
+      match level_order_match_or_none {
+        None => {
+          return false;
+        }
+        Some((matched_level, matched_order)) => {
+          let mut copy_of_found_level = (*matched_level).clone();
+          let copy_of_found_order = (*matched_order).clone();
+          if copy_of_found_level.remove_order(&copy_of_found_order) {
+            match p_order.side_ {
+              OrderSide::Buy => {
+                  if copy_of_found_level.orders_.is_empty() {
+                    return self.bids_.remove(&copy_of_found_level);
+                  } else {
+                    self.bids_.replace(copy_of_found_level);
+                    //TODO:: verify replaced element
+                  }
+                  return true;
+              }
+              OrderSide::Sell => {
+                  if copy_of_found_level.orders_.is_empty() {
+                    return self.asks_.remove(&copy_of_found_level);
+                  } else {
+                    self.asks_.replace(copy_of_found_level);
+                    //TODO:: verify replaced element
+                  }
+                  return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+
+
 }
 
 #[derive(Debug)]
@@ -347,10 +415,7 @@ pub struct MatchingEngine {
 }
 
 impl MatchingEngine {
-    pub fn process_new_order(
-        &mut self,
-        p_order: &mut Order,
-    ) -> Result<Option<MatchingResult>, String> {
+    pub fn process_new_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
         let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
         match order_book_or_error {
             None => {
@@ -384,6 +449,65 @@ impl MatchingEngine {
                 }
             }
         }
+    }
+
+    pub fn process_rpl_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
+        let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
+        match order_book_or_error {
+            None => {
+                return Err(String::from(
+                    "Failed find the order book of symbol {p_order.symbol_}, replace on order failed",
+                ));
+            }
+
+            Some(order_book) => {
+                let order_removed = order_book.remove_order_by_id(p_order);
+                if !order_removed {
+                  return Err(String::from("Failed to remove original order, replace failed"));
+                }
+
+                let matching_result_or_none = order_book.match_order(p_order)?;
+                match matching_result_or_none {
+                    None => {
+                        order_book.add_order(p_order);
+                        println!("After add {:?}", self);
+                        return Ok(None);
+                    }
+                    Some(match_result) => {
+                        p_order.qty_ -= match_result.executed_qty_;
+                        if p_order.qty_ > 0 {
+                            order_book.add_order(p_order);
+                        }
+                        println!(
+                            "Match result: {:?}, order qty: {} ",
+                            match_result, p_order.qty_
+                        );
+                        return Ok(Some(match_result));
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn process_cxl_order(&mut self, p_order: &mut Order) -> Result<bool, String> {
+      let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
+      match order_book_or_error {
+        None => {
+          return Err(String::from(
+           "Failed find the order book of symbol {p_order.symbol_}, replace on order failed",
+          ));
+        }
+
+        Some(order_book) => {
+          let order_removed = order_book.remove_order_by_id(p_order);
+          if !order_removed {
+            return Err(String::from("Failed to remove original order, cancel failed"));
+          }
+
+          //TODO:: retrigger matching of top BIDS and ASKS
+          return Ok(true);
+        }
+      }
     }
 
     pub fn contains(&self, p_symbol: &String) -> bool {
