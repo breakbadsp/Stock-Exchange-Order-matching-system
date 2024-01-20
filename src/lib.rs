@@ -160,7 +160,7 @@ impl Level {
     }
 
     fn remove_order(&mut self, p_remove_order: &Order) -> bool {
-      return self.orders_.remove(p_remove_order);
+        return self.orders_.remove(p_remove_order);
     }
 
     fn match_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
@@ -268,28 +268,28 @@ impl OrderBook {
     }
 
     fn get_level_match_from_id(&self, p_order: &Order) -> Option<(&Level, &Order)> {
-      match p_order.side_ {
-        OrderSide::Buy => {
-          for level in &self.bids_ {
-            for order in &level.orders_ {
-              if order.id_ == p_order.id_ {
-                return Some( (level, order) );
-              }
+        match p_order.side_ {
+            OrderSide::Buy => {
+                for level in &self.bids_ {
+                    for order in &level.orders_ {
+                        if order.id_ == p_order.id_ {
+                            return Some((level, order));
+                        }
+                    }
+                }
             }
-          }
-        }
 
-        OrderSide::Sell => {
-          for level in &self.asks_ {
-            for order in &level.orders_ {
-              if order.id_ == p_order.id_ {
-                return Some( (level, order) );
-              }
+            OrderSide::Sell => {
+                for level in &self.asks_ {
+                    for order in &level.orders_ {
+                        if order.id_ == p_order.id_ {
+                            return Some((level, order));
+                        }
+                    }
+                }
             }
-          }
         }
-      }
-      return None;
+        return None;
     }
 
     fn match_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
@@ -370,43 +370,40 @@ impl OrderBook {
     }
 
     fn remove_order_by_id(&mut self, p_order: &Order) -> bool {
-      let level_order_match_or_none = self.get_level_match_from_id(p_order);
-      match level_order_match_or_none {
-        None => {
-          return false;
-        }
-        Some((matched_level, matched_order)) => {
-          let mut copy_of_found_level = (*matched_level).clone();
-          let copy_of_found_order = (*matched_order).clone();
-          if copy_of_found_level.remove_order(&copy_of_found_order) {
-            match p_order.side_ {
-              OrderSide::Buy => {
-                  if copy_of_found_level.orders_.is_empty() {
-                    return self.bids_.remove(&copy_of_found_level);
-                  } else {
-                    self.bids_.replace(copy_of_found_level);
-                    //TODO:: verify replaced element
-                  }
-                  return true;
-              }
-              OrderSide::Sell => {
-                  if copy_of_found_level.orders_.is_empty() {
-                    return self.asks_.remove(&copy_of_found_level);
-                  } else {
-                    self.asks_.replace(copy_of_found_level);
-                    //TODO:: verify replaced element
-                  }
-                  return true;
-              }
+        let level_order_match_or_none = self.get_level_match_from_id(p_order);
+        match level_order_match_or_none {
+            None => {
+                return false;
             }
-          }
+            Some((matched_level, matched_order)) => {
+                let mut copy_of_found_level = (*matched_level).clone();
+                let copy_of_found_order = (*matched_order).clone();
+                if copy_of_found_level.remove_order(&copy_of_found_order) {
+                    match p_order.side_ {
+                        OrderSide::Buy => {
+                            if copy_of_found_level.orders_.is_empty() {
+                                return self.bids_.remove(&copy_of_found_level);
+                            } else {
+                                self.bids_.replace(copy_of_found_level);
+                                //TODO:: verify replaced element
+                            }
+                            return true;
+                        }
+                        OrderSide::Sell => {
+                            if copy_of_found_level.orders_.is_empty() {
+                                return self.asks_.remove(&copy_of_found_level);
+                            } else {
+                                self.asks_.replace(copy_of_found_level);
+                                //TODO:: verify replaced element
+                            }
+                            return true;
+                        }
+                    }
+                }
+            }
         }
-      }
-      return false;
+        return false;
     }
-
-
-
 }
 
 #[derive(Debug)]
@@ -415,7 +412,10 @@ pub struct MatchingEngine {
 }
 
 impl MatchingEngine {
-    pub fn process_new_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
+    pub fn process_new_order(
+        &mut self,
+        p_order: &mut Order,
+    ) -> Result<Option<MatchingResult>, String> {
         let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
         match order_book_or_error {
             None => {
@@ -451,7 +451,10 @@ impl MatchingEngine {
         }
     }
 
-    pub fn process_rpl_order(&mut self, p_order: &mut Order) -> Result<Option<MatchingResult>, String> {
+    pub fn process_rpl_order(
+        &mut self,
+        p_order: &mut Order,
+    ) -> Result<Option<MatchingResult>, String> {
         let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
         match order_book_or_error {
             None => {
@@ -463,7 +466,9 @@ impl MatchingEngine {
             Some(order_book) => {
                 let order_removed = order_book.remove_order_by_id(p_order);
                 if !order_removed {
-                  return Err(String::from("Failed to remove original order, replace failed"));
+                    return Err(String::from(
+                        "Failed to remove original order, replace failed",
+                    ));
                 }
 
                 let matching_result_or_none = order_book.match_order(p_order)?;
@@ -489,25 +494,29 @@ impl MatchingEngine {
         }
     }
 
-    pub fn process_cxl_order(&mut self, p_order: &mut Order) -> Result<bool, String> {
-      let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
-      match order_book_or_error {
-        None => {
-          return Err(String::from(
+    pub fn process_cxl_order(
+        &mut self,
+        p_order: &mut Order,
+    ) -> Result<Option<MatchingResult>, String> {
+        let order_book_or_error = self.get_book_by_symbol(&p_order.symbol_);
+        match order_book_or_error {
+            None => {
+                return Err(String::from(
            "Failed find the order book of symbol {p_order.symbol_}, replace on order failed",
           ));
-        }
+            }
 
-        Some(order_book) => {
-          let order_removed = order_book.remove_order_by_id(p_order);
-          if !order_removed {
-            return Err(String::from("Failed to remove original order, cancel failed"));
-          }
-
-          //TODO:: retrigger matching of top BIDS and ASKS
-          return Ok(true);
+            Some(order_book) => {
+                let order_removed = order_book.remove_order_by_id(p_order);
+                if !order_removed {
+                    return Err(String::from(
+                        "Failed to remove original order, cancel failed",
+                    ));
+                }
+                //TODO:: retrigger matching of top BIDS and ASKS if top is cancelled
+                return Ok(None);
+            }
         }
-      }
     }
 
     pub fn contains(&self, p_symbol: &String) -> bool {
@@ -545,13 +554,13 @@ pub fn process_event(
         }
 
         EventType::Rpl => {
-            // TODO::
-            return Ok(None);
+            println!("\nReplace Order, received:\n\t {:?}", p_order);
+            return p_order_book_collection.process_rpl_order(p_order);
         }
 
         EventType::Cxl => {
-            // TODO::
-            return Ok(None);
+            println!("\nCancel Order, received:\n\t {:?}", p_order);
+            return p_order_book_collection.process_cxl_order(p_order);
         }
     }
 }
@@ -560,17 +569,17 @@ pub fn process_event(
 mod test {
 
     /*
-    * Properties to verify : 
-    *   - exec Qty, exec Price, matched order id
-    * Matching scenarios:
-    *   - Simple match with Mkt order
-    *   - Simple match with limit order (price match)
-    *   - Best Price priority Then time priority (TODO:: More test cases)
-    *   - Best Price for bids vs best price for sells
-    *   - First order is mkt (no match found) => TODO::
-    *   - Match with Multiple orders : TODO:: Testing
-    *   - 
-    *   - 
+     * Properties to verify :
+     *   - exec Qty, exec Price, matched order id
+     * Matching scenarios:
+     *   - Simple match with Mkt order
+     *   - Simple match with limit order (price match)
+     *   - Best Price priority Then time priority (TODO:: More test cases)
+     *   - Best Price for bids vs best price for sells
+     *   - First order is mkt (no match found) => TODO::
+     *   - Match with Multiple orders : TODO:: Testing
+     *   -
+     *   -
      */
 
     use super::*;
@@ -1021,5 +1030,147 @@ mod test {
         matched_order_ids.clear();
         matched_order_ids.push("1".to_string());
         validate_result(&result, 200, 102.0, Some(&matched_order_ids));
+    }
+
+    #[test]
+    fn cancel_order_simple() {
+        let mut order_book_collection = MatchingEngine {
+            order_book_by_symbol_: HashMap::new(),
+        };
+
+        //New order
+        let mut order = Order {
+            id_: String::from("1"),
+            price_: 100.1,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+        let result = process_event(EventType::New, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        let mut matched_order_ids = Vec::new();
+        validate_result(&result, 00, 0.0, Some(&matched_order_ids));
+
+        //Cancel order id 1 , execqty 0 no erro
+        let mut order = Order {
+            id_: String::from("1"),
+            price_: 100.1,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+
+        let result = process_event(EventType::Cxl, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        matched_order_ids.clear();
+        validate_result(&result, 00, 0.0, Some(&matched_order_ids));
+
+        //Sending matching order to 1, but it should have been removed so no exec qty
+        let mut order = Order {
+            id_: String::from("2"),
+            price_: 100.1,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Sell,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+
+        let result = process_event(EventType::New, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        matched_order_ids.clear();
+        validate_result(&result, 00, 0.0, Some(&matched_order_ids));
+
+        //Sending matching order to 2, it should get executed
+        let mut order = Order {
+            id_: String::from("3"),
+            price_: 100.1,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+
+        let result = process_event(EventType::New, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        matched_order_ids.push(String::from("2"));
+        validate_result(&result, 200, 100.1, Some(&matched_order_ids));
+    }
+
+    #[test]
+    fn simple_replace_order() {
+        let mut order_book_collection = MatchingEngine {
+            order_book_by_symbol_: HashMap::new(),
+        };
+
+        //New order
+        let mut order = Order {
+            id_: String::from("1"),
+            price_: 100.1,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+        let result = process_event(EventType::New, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        let mut matched_order_ids = Vec::new();
+        validate_result(&result, 00, 0.0, Some(&matched_order_ids));
+
+        //Replace order id 1, make price less aggressive
+        let mut order = Order {
+            id_: String::from("1"),
+            price_: 100.0,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Buy,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+        let result = process_event(EventType::Rpl, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        matched_order_ids.clear();
+        validate_result(&result, 00, 0.0, Some(&matched_order_ids));
+
+        //sending sell order with less aggressive price so it does not match
+        let mut order = Order {
+            id_: String::from("2"),
+            price_: 100.1,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Sell,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+        let result = process_event(EventType::New, &mut order, &mut order_book_collection);
+        //mkt matched to best price which is 100 at this time
+        matched_order_ids.clear();
+        validate_result(&result, 00, 0.0, Some(&matched_order_ids));
+
+        //Replace above sell order with more aggressive price so it does match
+        let mut order = Order {
+            id_: String::from("2"),
+            price_: 100.0,
+            symbol_: String::from("REL"),
+            qty_: 200,
+            side_: OrderSide::Sell,
+            type_: OrderType::Limit,
+            entry_time_: std::time::SystemTime::now(),
+        };
+        let result = process_event(
+          EventType::Rpl, 
+          &mut order, 
+          &mut order_book_collection
+        );
+        
+        //mkt matched to best price which is 100 at this time
+        matched_order_ids.push(String::from("1"));
+        validate_result(&result, 200, 100.0, Some(&matched_order_ids));
     }
 }
