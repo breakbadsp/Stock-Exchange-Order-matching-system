@@ -1,5 +1,5 @@
 [package]
-name = "order_book"
+name = "order_matching_engine"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 
 [lib]
-name = "order_book"
+name = "order_matching_engine"
+path = "src/lib.rs"
