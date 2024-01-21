@@ -27,3 +27,15 @@ Project overview:
 How to build and use it:
   - Just clone the repo
   - run cargo test
+
+
+Future features planned to be added:
+  - User authentication service so that users can login 
+  - User should be able to send orders and receive NOE.
+  - Self match protection with client id in each order.
+  - Order Processing service which will use the Matching engine lib
+  - Front end to create and send orders(this is for testing)
+  - FIX engine to Support for FIX protocol so that any Broker can connect and send orders via fix
+  - Low latency Market data distribution service
+  - 
+  - 
