@@ -2,7 +2,7 @@ Exchange Order matching system.
 
 Project overview:
   
-  This is a project to build a matching engine and order book for a stock market exchange.
+  Trying to build a matching engine and order book for a stock market exchange.
   You can read more details about it in https://en.wikipedia.org/wiki/Order_matching_system this page
   
   I can think of two important components of this system.
